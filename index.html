@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Live Cyber Attack Map</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Share+Tech+Mono&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="grid-overlay"></div>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand-wrap">
+          <h1>LIVE CYBER ATTACK MAP</h1>
+          <p>Global Threat Telemetry Console</p>
+        </div>
+        <div class="status-wrap">
+          <span id="feedStatus" class="status-chip">FEEDS: BOOTING</span>
+          <span id="lastUpdated" class="status-chip">LAST UPDATE: --</span>
+          <button id="modeToggle" class="mode-toggle" type="button" aria-label="Toggle 2D and 3D view">
+            SWITCH TO 3D GLOBE
+          </button>
+        </div>
+      </header>
+
+      <main class="main-layout">
+        <section class="visual-stage">
+          <div id="map2d" class="view active" aria-label="2D cyber attack map"></div>
+          <div id="globe3d" class="view" aria-label="3D cyber attack globe"></div>
+
+          <div class="stage-hud">
+            <div class="hud-card">
+              <span class="hud-label">TOTAL EVENTS</span>
+              <span id="attackCounter" class="hud-value">0</span>
+            </div>
+            <div class="hud-card">
+              <span class="hud-label">THREAT LEVEL</span>
+              <span id="threatLevelText" class="hud-value alert">LOW</span>
+            </div>
+          </div>
+        </section>
+
+        <aside class="side-panel">
+          <section class="panel-block">
+            <h2>Threat Meter</h2>
+            <div class="meter-track">
+              <div id="threatMeterFill" class="meter-fill"></div>
+            </div>
+            <p id="threatMeterValue" class="panel-note">0 attacks/min</p>
+          </section>
+
+          <section class="panel-block">
+            <h2>Top Attacking Countries</h2>
+            <ul id="topCountries" class="rank-list"></ul>
+          </section>
+
+          <section class="panel-block">
+            <h2>Attack Types</h2>
+            <div id="attackTypes" class="type-tags"></div>
+          </section>
+
+          <section class="panel-block terminal">
+            <h2>Live Event Stream</h2>
+            <ul id="eventLog" class="event-log"></ul>
+          </section>
+        </aside>
+      </main>
+    </div>
+
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script src="https://unpkg.com/globe.gl"></script>
+    <script src="main.js"></script>
+  </body>
+</html>
