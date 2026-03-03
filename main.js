@@ -1,7 +1,6 @@
 (() => {
   "use strict";
 
-  const REFRESH_INTERVAL_MS = 5000;
   const MIN_ATTACKS_FOR_VISUAL_DENSITY = 28;
   const MAX_EVENT_LOG_ENTRIES = 48;
   const FEED_CACHE_TTL_MS = 60_000;
@@ -12,7 +11,9 @@
     maxActive2DLines: 140,
     maxQueued2DAttacks: 200,
     chunkSize2D: 60,
-    maxGlobeArcs: 120
+    maxGlobeArcs: 120,
+    launchIntervalMs: 220,
+    cycleTailMs: 2600
   };
 
   const LIVE_FEEDS = [
@@ -479,6 +480,10 @@
     performance: DEFAULT_PERFORMANCE_PROFILE,
     is3DMode: false,
     isRefreshing: false,
+    playbackLaunchTimer: null,
+    playbackAdvanceTimer: null,
+    nextCyclePromise: null,
+    streamStatusBase: "FEEDS: BOOTING",
     geoLookupsUsed: 0,
     totalAttackCount: 0,
     eventLog: [],
@@ -637,7 +642,7 @@
         timer: null
       };
 
-      const durationMs = 1700 + (index % 7) * 130;
+      const durationMs = 1600 + (hashToInt(attack.id || `${attack.ip}-${index}`) % 7) * 120;
       this.animateCurvedAttack(bundle, curvePoints, durationMs);
       bundle.timer = window.setTimeout(() => this.removeBundle(bundle), 4600);
 
@@ -814,7 +819,7 @@
       controls.maxDistance = 340;
     }
 
-    renderAttacks(attacks) {
+    renderAttacks(attacks, append = false) {
       if (!this.globe) {
         return;
       }
@@ -832,7 +837,11 @@
         sourcePointRadius: attack.threatPointRadius || 0.14
       }));
 
-      this.arcStore = freshArcs.slice(0, this.performance.maxGlobeArcs);
+      if (append) {
+        this.arcStore = [...freshArcs, ...this.arcStore].slice(0, this.performance.maxGlobeArcs);
+      } else {
+        this.arcStore = freshArcs.slice(0, this.performance.maxGlobeArcs);
+      }
 
       const points = [];
       this.arcStore.forEach((arc) => {
@@ -975,7 +984,9 @@
         maxActive2DLines: 70,
         maxQueued2DAttacks: 100,
         chunkSize2D: 28,
-        maxGlobeArcs: 55
+        maxGlobeArcs: 55,
+        launchIntervalMs: 320,
+        cycleTailMs: 2800
       };
     }
 
@@ -986,7 +997,9 @@
         maxActive2DLines: 120,
         maxQueued2DAttacks: 160,
         chunkSize2D: 46,
-        maxGlobeArcs: 90
+        maxGlobeArcs: 90,
+        launchIntervalMs: 220,
+        cycleTailMs: 2600
       };
     }
 
@@ -996,7 +1009,9 @@
       maxActive2DLines: 180,
       maxQueued2DAttacks: 240,
       chunkSize2D: 72,
-      maxGlobeArcs: 140
+      maxGlobeArcs: 140,
+      launchIntervalMs: 160,
+      cycleTailMs: 2400
     };
   }
 
@@ -1646,10 +1661,15 @@
     }
   }
 
-  async function refreshCycle() {
+  async function prepareCycleData() {
     if (state.isRefreshing) {
-      return;
+      return {
+        attacks: [],
+        totalFeedEvents: 0,
+        status: "FEEDS: PREVIOUS FETCH STILL RUNNING"
+      };
     }
+
     state.isRefreshing = true;
     state.geoLookupsUsed = 0;
 
@@ -1657,24 +1677,125 @@
       const loaded = await loadThreatRecords();
       const totalFeedEvents = Array.isArray(loaded.records) ? loaded.records.length : 0;
       const attacks = await buildAttackEvents(loaded.records, state.performance.maxVisualAttacks);
+      const status = `${loaded.status} | VIS ${attacks.length}/${totalFeedEvents} (${state.performance.tier})`;
 
-      state.totalAttackCount += totalFeedEvents;
-      state.attackHistory = [...attacks, ...state.attackHistory].slice(0, 1400);
-      state.eventLog = [...attacks, ...state.eventLog].slice(0, MAX_EVENT_LOG_ENTRIES);
-
-      state.map2D.renderAttacks(attacks);
-      state.globe3D.renderAttacks(attacks);
-
-      const cappedStatus = `${loaded.status} | VIS ${attacks.length}/${totalFeedEvents} (${state.performance.tier})`;
-      updateHud(cappedStatus);
-      renderTopCountries();
-      renderAttackTypes();
-      renderEventLog();
+      return {
+        attacks,
+        totalFeedEvents,
+        status
+      };
     } catch (_error) {
-      updateHud("FEEDS: ERROR, USING LAST KNOWN STATE");
+      return {
+        attacks: [],
+        totalFeedEvents: 0,
+        status: "FEEDS: ERROR, USING LAST KNOWN STATE"
+      };
     } finally {
       state.isRefreshing = false;
     }
+  }
+
+  function ensureNextCyclePrefetch() {
+    if (state.nextCyclePromise) {
+      return state.nextCyclePromise;
+    }
+    state.nextCyclePromise = prepareCycleData();
+    return state.nextCyclePromise;
+  }
+
+  async function consumePrefetchedCycle() {
+    const promise = ensureNextCyclePrefetch();
+    const cycle = await promise;
+    if (state.nextCyclePromise === promise) {
+      state.nextCyclePromise = null;
+    }
+    return cycle;
+  }
+
+  function estimateCyclePlaybackMs(attackCount) {
+    if (attackCount <= 0) {
+      return 1200;
+    }
+    const launchInterval = state.performance.launchIntervalMs;
+    const tailMs = state.performance.cycleTailMs;
+    return Math.max(1400, (attackCount - 1) * launchInterval + tailMs);
+  }
+
+  function applyCycleStats(cycle) {
+    const attacks = Array.isArray(cycle.attacks) ? cycle.attacks : [];
+    const totalFeedEvents = Number(cycle.totalFeedEvents || 0);
+
+    state.totalAttackCount += totalFeedEvents;
+    state.attackHistory = [...attacks, ...state.attackHistory].slice(0, 1400);
+    state.eventLog = [...attacks, ...state.eventLog].slice(0, MAX_EVENT_LOG_ENTRIES);
+    state.streamStatusBase = cycle.status || "FEEDS: ACTIVE";
+
+    renderTopCountries();
+    renderAttackTypes();
+    renderEventLog();
+    updateHud(`${state.streamStatusBase} | STREAMING`);
+  }
+
+  function launchAttacksSequentially(attacks) {
+    if (!Array.isArray(attacks) || !attacks.length) {
+      return;
+    }
+
+    let index = 0;
+    const delayMs = state.performance.launchIntervalMs;
+
+    const launchNext = () => {
+      if (index >= attacks.length) {
+        return;
+      }
+
+      const attack = attacks[index];
+      state.map2D.renderAttacks([attack]);
+      state.globe3D.renderAttacks([attack], true);
+      index += 1;
+
+      if (index < attacks.length) {
+        state.playbackLaunchTimer = window.setTimeout(launchNext, delayMs);
+      } else {
+        state.playbackLaunchTimer = null;
+      }
+    };
+
+    launchNext();
+  }
+
+  async function continuePlaybackStream() {
+    const nextCycle = await consumePrefetchedCycle();
+    runCyclePlayback(nextCycle);
+  }
+
+  function runCyclePlayback(cycle) {
+    if (state.playbackLaunchTimer) {
+      window.clearTimeout(state.playbackLaunchTimer);
+      state.playbackLaunchTimer = null;
+    }
+    if (state.playbackAdvanceTimer) {
+      window.clearTimeout(state.playbackAdvanceTimer);
+      state.playbackAdvanceTimer = null;
+    }
+
+    const safeCycle = cycle || { attacks: [], totalFeedEvents: 0, status: "FEEDS: NO DATA" };
+    const attacks = Array.isArray(safeCycle.attacks) ? safeCycle.attacks : [];
+
+    applyCycleStats(safeCycle);
+    launchAttacksSequentially(attacks);
+    ensureNextCyclePrefetch();
+
+    const cycleMs = estimateCyclePlaybackMs(attacks.length);
+    state.playbackAdvanceTimer = window.setTimeout(() => {
+      continuePlaybackStream();
+    }, cycleMs);
+  }
+
+  async function startPlaybackStream() {
+    updateHud("FEEDS: PREFETCHING INITIAL CYCLE");
+    const firstCycle = await consumePrefetchedCycle();
+    runCyclePlayback(firstCycle);
   }
 
   function init() {
@@ -1695,8 +1816,7 @@
       state.globe3D.resize();
     });
 
-    refreshCycle();
-    window.setInterval(refreshCycle, REFRESH_INTERVAL_MS);
+    startPlaybackStream();
   }
 
   document.addEventListener("DOMContentLoaded", init);
