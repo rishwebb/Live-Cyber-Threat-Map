@@ -6,6 +6,14 @@
   const MAX_EVENT_LOG_ENTRIES = 48;
   const FEED_CACHE_TTL_MS = 60_000;
   const GEO_LOOKUP_BUDGET_PER_CYCLE = 12;
+  const DEFAULT_PERFORMANCE_PROFILE = {
+    tier: "balanced",
+    maxVisualAttacks: 120,
+    maxActive2DLines: 140,
+    maxQueued2DAttacks: 200,
+    chunkSize2D: 60,
+    maxGlobeArcs: 120
+  };
 
   const LIVE_FEEDS = [
     {
@@ -468,6 +476,7 @@
   const state = {
     map2D: null,
     globe3D: null,
+    performance: DEFAULT_PERFORMANCE_PROFILE,
     is3DMode: false,
     isRefreshing: false,
     geoLookupsUsed: 0,
@@ -480,12 +489,13 @@
   };
 
   class Map2DRenderer {
-    constructor(containerId) {
+    constructor(containerId, performanceProfile) {
       this.containerId = containerId;
       this.map = null;
       this.layers = [];
       this.renderQueue = [];
       this.renderFrame = null;
+      this.performance = performanceProfile || DEFAULT_PERFORMANCE_PROFILE;
     }
 
     init() {
@@ -529,7 +539,13 @@
       if (!attacks.length) {
         return;
       }
-      this.renderQueue.push(...attacks);
+      const room = Math.max(0, this.performance.maxQueued2DAttacks - this.renderQueue.length);
+      if (room <= 0) {
+        return;
+      }
+
+      const accepted = attacks.slice(0, room);
+      this.renderQueue.push(...accepted);
       if (!this.renderFrame) {
         this.processRenderQueue();
       }
@@ -542,7 +558,7 @@
         return;
       }
 
-      const chunkSize = 120;
+      const chunkSize = this.performance.chunkSize2D;
       const batch = this.renderQueue.splice(0, chunkSize);
       batch.forEach((attack, idx) => {
         this.drawAttack(attack, idx);
@@ -626,6 +642,9 @@
       bundle.timer = window.setTimeout(() => this.removeBundle(bundle), 4600);
 
       this.layers.push(bundle);
+      while (this.layers.length > this.performance.maxActive2DLines) {
+        this.removeBundle(this.layers[0]);
+      }
     }
 
     buildCurvePoints(origin, target, segments = 56) {
@@ -750,11 +769,12 @@
   }
 
   class GlobeRenderer {
-    constructor(containerId) {
+    constructor(containerId, performanceProfile) {
       this.containerId = containerId;
       this.container = null;
       this.globe = null;
       this.arcStore = [];
+      this.performance = performanceProfile || DEFAULT_PERFORMANCE_PROFILE;
     }
 
     init() {
@@ -799,7 +819,7 @@
         return;
       }
 
-      const freshArcs = attacks.map((attack) => ({
+      const freshArcs = attacks.slice(0, this.performance.maxGlobeArcs).map((attack) => ({
         startLat: attack.fromLat,
         startLng: attack.fromLng,
         endLat: attack.toLat,
@@ -812,7 +832,7 @@
         sourcePointRadius: attack.threatPointRadius || 0.14
       }));
 
-      this.arcStore = freshArcs;
+      this.arcStore = freshArcs.slice(0, this.performance.maxGlobeArcs);
 
       const points = [];
       this.arcStore.forEach((arc) => {
@@ -939,6 +959,44 @@
       fade: style.fade,
       weight: style.weight,
       pointRadius: style.pointRadius
+    };
+  }
+
+  function detectPerformanceProfile() {
+    const cores = Number(navigator.hardwareConcurrency || 4);
+    const memory = Number(navigator.deviceMemory || 4);
+    const width = window.innerWidth || 1280;
+    const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent || "") || width < 760;
+
+    if (cores <= 2 || memory <= 2 || (isMobile && cores <= 4)) {
+      return {
+        tier: "safe",
+        maxVisualAttacks: 55,
+        maxActive2DLines: 70,
+        maxQueued2DAttacks: 100,
+        chunkSize2D: 28,
+        maxGlobeArcs: 55
+      };
+    }
+
+    if (cores <= 4 || memory <= 4 || isMobile || width < 1100) {
+      return {
+        tier: "balanced",
+        maxVisualAttacks: 95,
+        maxActive2DLines: 120,
+        maxQueued2DAttacks: 160,
+        chunkSize2D: 46,
+        maxGlobeArcs: 90
+      };
+    }
+
+    return {
+      tier: "high",
+      maxVisualAttacks: 150,
+      maxActive2DLines: 180,
+      maxQueued2DAttacks: 240,
+      chunkSize2D: 72,
+      maxGlobeArcs: 140
     };
   }
 
@@ -1357,10 +1415,12 @@
     return PROTECTED_TARGETS[idx % PROTECTED_TARGETS.length];
   }
 
-  async function buildAttackEvents(records) {
+  async function buildAttackEvents(records, maxVisualAttacks) {
     const allRecords = shuffleArray(Array.isArray(records) ? records : []);
+    const visualBudget = clamp(Number(maxVisualAttacks) || DEFAULT_PERFORMANCE_PROFILE.maxVisualAttacks, 20, 300);
+    const recordsForRender = allRecords.slice(0, visualBudget);
 
-    const enriched = await mapWithConcurrency(allRecords, 12, async (record) => {
+    const enriched = await mapWithConcurrency(recordsForRender, 10, async (record) => {
       const geo = await resolveLocation(record);
       return {
         ...record,
@@ -1595,16 +1655,18 @@
 
     try {
       const loaded = await loadThreatRecords();
-      const attacks = await buildAttackEvents(loaded.records);
+      const totalFeedEvents = Array.isArray(loaded.records) ? loaded.records.length : 0;
+      const attacks = await buildAttackEvents(loaded.records, state.performance.maxVisualAttacks);
 
-      state.totalAttackCount += attacks.length;
+      state.totalAttackCount += totalFeedEvents;
       state.attackHistory = [...attacks, ...state.attackHistory].slice(0, 1400);
       state.eventLog = [...attacks, ...state.eventLog].slice(0, MAX_EVENT_LOG_ENTRIES);
 
       state.map2D.renderAttacks(attacks);
       state.globe3D.renderAttacks(attacks);
 
-      updateHud(loaded.status);
+      const cappedStatus = `${loaded.status} | VIS ${attacks.length}/${totalFeedEvents} (${state.performance.tier})`;
+      updateHud(cappedStatus);
       renderTopCountries();
       renderAttackTypes();
       renderEventLog();
@@ -1616,8 +1678,9 @@
   }
 
   function init() {
-    state.map2D = new Map2DRenderer("map2d");
-    state.globe3D = new GlobeRenderer("globe3d");
+    state.performance = detectPerformanceProfile();
+    state.map2D = new Map2DRenderer("map2d", state.performance);
+    state.globe3D = new GlobeRenderer("globe3d", state.performance);
 
     state.map2D.init();
     state.globe3D.init();
