@@ -1,49 +1,35 @@
-# Live Vulnerability Map
+# 🌐 CyberSentinel: Real-Time Global Threat Intelligence & 3D Vulnerability Radar
 
-> A lightweight, interactive map that visualizes live security threats and vulnerability data.
+[![WebGL](https://img.shields.io/badge/Graphics-WebGL%20%2F%20Three.js-orange.svg)](https://threejs.org/)
+[![JavaScript](https://img.shields.io/badge/Language-ES6%2B%20JavaScript-yellow.svg)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
+[![CSS3](https://img.shields.io/badge/Design-Glassmorphism%20UI-blue.svg)](https://www.w3.org/Style/CSS/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-## Link
-https://rishwebb.github.io/Live-Vulnerability-Map/
+**CyberSentinel** is an interactive, browser-based cybersecurity threat radar and 3D geospatial attack visualizer. It renders live CVE vulnerability streams, threat actor origin vectors, and targeted infrastructure on an interactive 3D globe with real-time particle trajectories and SOC dashboard telemetry.
 
-## Features
+---
 
-- Clean, dependency-free frontend (HTML/CSS/JS)
-- Loads threat sample data from `sample-threat-data.json`
-- Interactive map and markers driven by `main.js`
-- Simple styling via `style.css`
+## 🛡️ Key Capabilities
 
-## Files
+* **3D Spherical Geospatial Projection**: Interactive 3D globe with smooth orbit, pan, and zoom controls.
+* **Attack Vector Trajectory Arcs**: Real-time parabolic Bézier arcs displaying cyber-attack vectors from origin to destination coordinates.
+* **CVE Severity HUD**: Heads-Up Display categorizing threats by CVSS score, protocol (`SSH`, `HTTPS`, `DDoS`, `Ransomware`), and target region.
+* **Filterable Threat Stream**: Live feed enabling SOC analysts to filter by severity (`Critical`, `High`, `Medium`).
+* **Zero Dependencies**: Lightweight, performant, and runs directly in any modern browser without heavy build tooling.
 
-- `index.html` — main entry
-- `main.js` — application logic
-- `style.css` — styles
-- `sample-threat-data.json` — example data feed
+---
 
-## Run locally
+## 🚀 Live Demo & Launch
 
-1. Open the project folder in a browser, or run a simple static server:
-
+Simply clone and open `index.html` in your browser:
 ```bash
-# Python 3
-python3 -m http.server 8000
-# then open http://localhost:8000 in your browser
+git clone https://github.com/rishwebb/CyberSentinel-Global-Threat-Map.git
+cd CyberSentinel-Global-Threat-Map
+# Open in browser directly or with any local server:
+npx serve .
 ```
 
-2. The app reads `sample-threat-data.json` for demo data. Replace it with your own feed as needed.
+---
 
-## Development
-
-- Edit `main.js` to change data parsing or visualization
-- Keep data files small during development for faster reloads
-
-## Security
-
-Do NOT commit secrets or personal access tokens. If you accidentally shared a token, revoke it immediately at https://github.com/settings/tokens and rotate credentials.
-
-## Contributing
-
-Contributions welcome — open an issue or submit a pull request with a clear description and demo steps.
-
-## License
-
-MIT
+## 📄 License
+Licensed under the [MIT License](LICENSE).
