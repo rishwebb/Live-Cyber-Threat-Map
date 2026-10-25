@@ -1,11 +1,11 @@
-# 🌐 CyberSentinel: Real-Time Global Threat Intelligence & 3D Vulnerability Radar
+# 🌐 Live Cyber Threat Map & 3D Vulnerability Visualizer
 
 [![WebGL](https://img.shields.io/badge/Graphics-WebGL%20%2F%20Three.js-orange.svg)](https://threejs.org/)
 [![JavaScript](https://img.shields.io/badge/Language-ES6%2B%20JavaScript-yellow.svg)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
 [![CSS3](https://img.shields.io/badge/Design-Glassmorphism%20UI-blue.svg)](https://www.w3.org/Style/CSS/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-**CyberSentinel** is an interactive, browser-based cybersecurity threat radar and 3D geospatial attack visualizer. It renders live CVE vulnerability streams, threat actor origin vectors, and targeted infrastructure on an interactive 3D globe with real-time particle trajectories and SOC dashboard telemetry.
+**Live Cyber Threat Map** is an interactive, browser-based cybersecurity threat radar and 3D geospatial attack visualizer. It renders live CVE vulnerability streams, threat actor origin vectors, and targeted infrastructure on an interactive 3D globe with real-time particle trajectories and SOC dashboard telemetry.
 
 ---
 
